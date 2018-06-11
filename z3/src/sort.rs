@@ -45,6 +45,16 @@ impl<'ctx> Sort<'ctx> {
         }
     }
 
+    pub fn string(ctx: &Context) -> Sort {
+        Sort {
+            ctx,
+            z3_sort: unsafe {
+                let guard = Z3_MUTEX.lock().unwrap();
+                Z3_mk_string_sort(ctx.z3_ctx)
+            },
+        }
+    }
+
     pub fn bitvector(ctx: &Context, sz: u32) -> Sort {
         Sort {
             ctx,
@@ -61,6 +71,16 @@ impl<'ctx> Sort<'ctx> {
             z3_sort: unsafe {
                 let guard = Z3_MUTEX.lock().unwrap();
                 Z3_mk_array_sort(ctx.z3_ctx, domain.z3_sort, range.z3_sort)
+            },
+        }
+    }
+
+    pub fn seq(ctx: &'ctx Context, s: &Sort<'ctx>) -> Sort<'ctx> {
+        Sort {
+            ctx,
+            z3_sort: unsafe {
+                let guard = Z3_MUTEX.lock().unwrap();
+                Z3_mk_seq_sort(ctx.z3_ctx, s.z3_sort)
             },
         }
     }

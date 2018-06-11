@@ -114,6 +114,16 @@ impl<'ctx> Ast<'ctx> {
         })
     }
 
+    pub fn from_string(ctx: &'ctx Context, s: &str) -> Ast<'ctx> {
+        let ss = CString::new(s).unwrap();
+        let p = ss.as_ptr();
+        Ast::new(ctx, unsafe {
+            let sort = ctx.string_sort();
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_string(ctx.z3_ctx, p)
+        })
+    }
+
     pub fn from_real(ctx: &'ctx Context, num: i32, den: i32) -> Ast<'ctx> {
         Ast::new(ctx, unsafe {
             let guard = Z3_MUTEX.lock().unwrap();
@@ -122,6 +132,14 @@ impl<'ctx> Ast<'ctx> {
                 num as ::std::os::raw::c_int,
                 den as ::std::os::raw::c_int,
             )
+        })
+    }
+
+    pub fn bv_from_u64(ctx: &'ctx Context, u: u64, sz: u32) -> Ast<'ctx> {
+        Ast::new(ctx, unsafe {
+            let sort = ctx.bitvector_sort(sz);
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_unsigned_int64(ctx.z3_ctx, u, sort.z3_sort)
         })
     }
 
@@ -237,6 +255,10 @@ impl<'ctx> Ast<'ctx> {
     // Array ops
     binop!(select, Z3_mk_select);
     trinop!(store, Z3_mk_store);
+
+    // Seq ops
+    unop!(seq_length, Z3_mk_seq_length);
+    binop!(seq_at, Z3_mk_seq_at);
 
     // Set ops
     binop!(set_add, Z3_mk_set_add);

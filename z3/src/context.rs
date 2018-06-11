@@ -32,12 +32,20 @@ impl Context {
         Sort::real(self)
     }
 
+    pub fn string_sort(&self) -> Sort {
+        Sort::string(self)
+    }
+
     pub fn bitvector_sort(&self, sz: u32) -> Sort {
         Sort::bitvector(self, sz)
     }
 
     pub fn array_sort<'ctx>(&'ctx self, domain: &Sort<'ctx>, range: &Sort<'ctx>) -> Sort<'ctx> {
         Sort::array(self, domain, range)
+    }
+
+    pub fn seq_sort<'ctx>(&'ctx self, s: &Sort<'ctx>) -> Sort<'ctx> {
+        Sort::seq(self, s)
     }
 
     pub fn set_sort<'ctx>(&'ctx self, elt: &Sort<'ctx>) -> Sort<'ctx> {
