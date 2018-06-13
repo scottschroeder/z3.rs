@@ -35,6 +35,26 @@ impl<'ctx> Sort<'ctx> {
         }
     }
 
+    pub fn single_float(ctx: &Context) -> Sort {
+        Sort {
+            ctx,
+            z3_sort: unsafe {
+                let guard = Z3_MUTEX.lock().unwrap();
+                Z3_mk_fpa_sort_32(ctx.z3_ctx)
+            },
+        }
+    }
+
+    pub fn double_float(ctx: &Context) -> Sort {
+        Sort {
+            ctx,
+            z3_sort: unsafe {
+                let guard = Z3_MUTEX.lock().unwrap();
+                Z3_mk_fpa_sort_64(ctx.z3_ctx)
+            },
+        }
+    }
+
     pub fn real(ctx: &Context) -> Sort {
         Sort {
             ctx,

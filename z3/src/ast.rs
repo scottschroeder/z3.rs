@@ -30,6 +30,19 @@ macro_rules! binop {
     };
 }
 
+macro_rules! binop_round {
+    ( $f:ident, $z3fn:ident ) => {
+        pub fn $f(&self, other: &Ast<'ctx>) -> Ast<'ctx> {
+            Ast::new(self.ctx, unsafe {
+                let guard = Z3_MUTEX.lock().unwrap();
+                // https://en.wikipedia.org/wiki/IEEE_754#Rounding_rules
+                let round = Z3_mk_fpa_round_nearest_ties_to_even(self.ctx.z3_ctx);
+                $z3fn(self.ctx.z3_ctx, round, self.z3_ast, other.z3_ast)
+            })
+    }
+    };
+}
+
 macro_rules! trinop {
     ( $f:ident, $z3fn:ident ) => {
         pub fn $f(&self, a: &Ast<'ctx>, b: &Ast<'ctx>) -> Ast<'ctx> {
@@ -57,7 +70,9 @@ macro_rules! varop {
     };
 }
 
+
 impl<'ctx> Ast<'ctx> {
+
     pub fn new(ctx: &Context, ast: Z3_ast) -> Ast {
         assert!(!ast.is_null());
         Ast {
@@ -121,6 +136,50 @@ impl<'ctx> Ast<'ctx> {
             let sort = ctx.string_sort();
             let guard = Z3_MUTEX.lock().unwrap();
             Z3_mk_string(ctx.z3_ctx, p)
+        })
+    }
+
+    pub fn from_f32(ctx: &'ctx Context, f: f32) -> Ast<'ctx> {
+
+        let fp_bits = f.to_bits();
+        let sign = (fp_bits & (1 << 31)) >> 31; // Most significant bit
+        let exp = (fp_bits & (0x7F8 << 23)) >> 23; // Next 8 significant bits
+        let significand = fp_bits & (0x7F_FFFF); // Remaining 23 bits
+
+        let z3_sign = Ast::bv_from_u64(ctx, sign as u64, 1);
+        let z3_exp = Ast::bv_from_u64(ctx, exp as u64, 8);
+        let z3_significand = Ast::bv_from_u64(ctx, significand as u64, 23);
+
+        Ast::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_fpa_fp(
+                ctx.z3_ctx,
+                z3_sign.z3_ast,
+                z3_exp.z3_ast,
+                z3_significand.z3_ast,
+            )
+        })
+    }
+
+    pub fn from_f64(ctx: &'ctx Context, f: f64) -> Ast<'ctx> {
+
+        let fp_bits = f.to_bits();
+        let sign = (fp_bits & (1 << 63)) >> 63; // Most significant bit
+        let exp = (fp_bits & (0x7FF << 52)) >> 52; // Next 11 significant bits
+        let significand = fp_bits & (0xF_FFFF_FFFF_FFFF); // Remaining 52 bits
+
+        let z3_sign = Ast::bv_from_u64(ctx, sign, 1);
+        let z3_exp = Ast::bv_from_u64(ctx, exp, 11);
+        let z3_significand = Ast::bv_from_u64(ctx, significand, 52);
+
+        Ast::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_fpa_fp(
+                ctx.z3_ctx,
+                z3_sign.z3_ast,
+                z3_exp.z3_ast,
+                z3_significand.z3_ast,
+            )
         })
     }
 
@@ -219,6 +278,21 @@ impl<'ctx> Ast<'ctx> {
     unop!(int2real, Z3_mk_int2real);
     unop!(real2int, Z3_mk_real2int);
     unop!(is_int, Z3_mk_is_int);
+
+    // Numeric floating point
+    binop!(fp_rem, Z3_mk_fpa_rem);
+    unop!(fp_minus, Z3_mk_fpa_neg);
+    binop!(fp_lt, Z3_mk_fpa_lt);
+    binop!(fp_le, Z3_mk_fpa_leq);
+    binop!(fp_eq, Z3_mk_fpa_eq);
+    binop!(fp_ge, Z3_mk_fpa_geq);
+    binop!(fp_gt, Z3_mk_fpa_gt);
+    unop!(fp_abs, Z3_mk_fpa_abs);
+    binop_round!(fp_div, Z3_mk_fpa_div);
+    binop_round!(fp_add, Z3_mk_fpa_add);
+    binop_round!(fp_mul, Z3_mk_fpa_mul);
+    binop_round!(fp_sub, Z3_mk_fpa_sub);
+    binop!(fp_sqrt, Z3_mk_fpa_sqrt);
 
     // Bitvector ops
     unop!(bvnot, Z3_mk_bvnot);

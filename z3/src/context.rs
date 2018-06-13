@@ -28,6 +28,14 @@ impl Context {
         Sort::int(self)
     }
 
+    pub fn single_float_sort(&self) -> Sort {
+        Sort::single_float(self)
+    }
+
+    pub fn double_float_sort(&self) -> Sort {
+        Sort::double_float(self)
+    }
+
     pub fn real_sort(&self) -> Sort {
         Sort::real(self)
     }
