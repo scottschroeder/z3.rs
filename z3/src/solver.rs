@@ -4,6 +4,7 @@ use Solver;
 use Model;
 use Ast;
 use Z3_MUTEX;
+use SolveOutcome;
 
 impl<'ctx> Solver<'ctx> {
     pub fn new(ctx: &Context) -> Solver {
@@ -25,11 +26,20 @@ impl<'ctx> Solver<'ctx> {
         }
     }
 
-    pub fn check(&self) -> bool {
+    pub fn raw_check(&self) -> SolveOutcome {
         unsafe {
             let guard = Z3_MUTEX.lock().unwrap();
-            Z3_solver_check(self.ctx.z3_ctx, self.z3_slv) == Z3_L_TRUE
+            match Z3_solver_check(self.ctx.z3_ctx, self.z3_slv) {
+                Z3_L_FALSE => SolveOutcome::UnSat,
+                Z3_L_UNDEF => SolveOutcome::Undefined,
+                Z3_L_TRUE => SolveOutcome::Sat,
+                i => panic!("Z3 did not return a valid Z3_lbool: {}", i),
+            }
         }
+    }
+
+    pub fn check(&self) -> bool {
+        self.raw_check() == SolveOutcome::Sat
     }
 
     pub fn get_model(&self) -> Model<'ctx> {

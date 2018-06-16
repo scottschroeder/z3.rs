@@ -29,6 +29,14 @@ lazy_static! {
     static ref Z3_MUTEX: Mutex<()> = Mutex::new(());
 }
 
+// z3-sys should just make Z3_lbool a proper enum
+#[derive(Debug, PartialEq)]
+pub enum SolveOutcome {
+    UnSat,
+    Undefined,
+    Sat,
+}
+
 pub struct Config {
     kvs: Vec<(CString, CString)>,
     z3_cfg: Z3_config,
