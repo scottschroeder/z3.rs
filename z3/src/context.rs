@@ -116,6 +116,18 @@ impl Context {
         Ast::fresh_const(self, prefix, &self.real_sort())
     }
 
+    pub fn named_string_const(&self, s: &str) -> Ast {
+        Ast::new_const(&self.str_sym(s), &self.string_sort())
+    }
+
+    pub fn numbered_string_const(&self, i: u32) -> Ast {
+        Ast::new_const(&self.int_sym(i), &self.string_sort())
+    }
+
+    pub fn fresh_string_const<'ctx>(&'ctx self, prefix: &str) -> Ast<'ctx> {
+        Ast::fresh_const(self, prefix, &self.string_sort())
+    }
+
     pub fn named_bitvector_const(&self, s: &str, sz: u32) -> Ast {
         Ast::new_const(&self.str_sym(s), &self.bitvector_sort(sz))
     }

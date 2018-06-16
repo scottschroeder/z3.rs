@@ -6,7 +6,7 @@ use Ast;
 use Z3_MUTEX;
 use std::hash::{Hash, Hasher};
 use std::cmp::{Eq, PartialEq};
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 
 macro_rules! unop {
     ( $f:ident, $z3fn:ident ) => {
@@ -72,7 +72,6 @@ macro_rules! varop {
 
 
 impl<'ctx> Ast<'ctx> {
-
     pub fn new(ctx: &Context, ast: Z3_ast) -> Ast {
         assert!(!ast.is_null());
         Ast {
@@ -140,45 +139,25 @@ impl<'ctx> Ast<'ctx> {
     }
 
     pub fn from_f32(ctx: &'ctx Context, f: f32) -> Ast<'ctx> {
-
-        let fp_bits = f.to_bits();
-        let sign = (fp_bits & (1 << 31)) >> 31; // Most significant bit
-        let exp = (fp_bits & (0x7F8 << 23)) >> 23; // Next 8 significant bits
-        let significand = fp_bits & (0x7F_FFFF); // Remaining 23 bits
-
-        let z3_sign = Ast::bv_from_u64(ctx, sign as u64, 1);
-        let z3_exp = Ast::bv_from_u64(ctx, exp as u64, 8);
-        let z3_significand = Ast::bv_from_u64(ctx, significand as u64, 23);
-
+        let sort = ctx.single_float_sort();
         Ast::new(ctx, unsafe {
             let guard = Z3_MUTEX.lock().unwrap();
-            Z3_mk_fpa_fp(
+            Z3_mk_fpa_numeral_float(
                 ctx.z3_ctx,
-                z3_sign.z3_ast,
-                z3_exp.z3_ast,
-                z3_significand.z3_ast,
+                f,
+                sort.z3_sort,
             )
         })
     }
 
     pub fn from_f64(ctx: &'ctx Context, f: f64) -> Ast<'ctx> {
-
-        let fp_bits = f.to_bits();
-        let sign = (fp_bits & (1 << 63)) >> 63; // Most significant bit
-        let exp = (fp_bits & (0x7FF << 52)) >> 52; // Next 11 significant bits
-        let significand = fp_bits & (0xF_FFFF_FFFF_FFFF); // Remaining 52 bits
-
-        let z3_sign = Ast::bv_from_u64(ctx, sign, 1);
-        let z3_exp = Ast::bv_from_u64(ctx, exp, 11);
-        let z3_significand = Ast::bv_from_u64(ctx, significand, 52);
-
+        let sort = ctx.double_float_sort();
         Ast::new(ctx, unsafe {
             let guard = Z3_MUTEX.lock().unwrap();
-            Z3_mk_fpa_fp(
+            Z3_mk_fpa_numeral_double(
                 ctx.z3_ctx,
-                z3_sign.z3_ast,
-                z3_exp.z3_ast,
-                z3_significand.z3_ast,
+                f,
+                sort.z3_sort,
             )
         })
     }
@@ -250,6 +229,27 @@ impl<'ctx> Ast<'ctx> {
         }
     }
 
+    pub fn seq_concat(ctx: &'ctx Context, args: &[&Ast<'ctx>]) -> Ast<'ctx> {
+        let ast_ptrs: Vec<Z3_ast> = args.iter().map(|ast| ast.z3_ast).collect();
+
+        Ast::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_seq_concat(
+                ctx.z3_ctx,
+                ast_ptrs.len() as ::std::os::raw::c_uint,
+                ast_ptrs.as_ptr(),
+            )
+        })
+    }
+
+    pub fn display(&self) -> &'ctx str {
+        unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            let cstr = Z3_ast_to_string(self.ctx.z3_ctx, self.z3_ast);
+            CStr::from_ptr(cstr).to_str().unwrap()
+        }
+    }
+
     varop!(distinct, Z3_mk_distinct);
 
     // Boolean ops
@@ -278,6 +278,7 @@ impl<'ctx> Ast<'ctx> {
     unop!(int2real, Z3_mk_int2real);
     unop!(real2int, Z3_mk_real2int);
     unop!(is_int, Z3_mk_is_int);
+    unop!(int_to_str, Z3_mk_int_to_str);
 
     // Numeric floating point
     binop!(fp_rem, Z3_mk_fpa_rem);

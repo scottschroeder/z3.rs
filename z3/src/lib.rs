@@ -18,6 +18,7 @@ mod config;
 mod context;
 mod symbol;
 mod ast;
+mod function;
 mod solver;
 mod optimize;
 mod model;
@@ -51,6 +52,11 @@ pub struct Sort<'ctx> {
 pub struct Ast<'ctx> {
     ctx: &'ctx Context,
     z3_ast: Z3_ast,
+}
+
+pub struct Function<'ctx> {
+    ctx: &'ctx Context,
+    z3_func: Z3_func_decl,
 }
 
 pub struct Solver<'ctx> {
