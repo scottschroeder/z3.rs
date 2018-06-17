@@ -67,6 +67,11 @@ pub struct Function<'ctx> {
     z3_func: Z3_func_decl,
 }
 
+pub struct Pattern<'ctx> {
+    ctx: &'ctx Context,
+    z3_pattern: Z3_pattern,
+}
+
 pub struct Solver<'ctx> {
     ctx: &'ctx Context,
     z3_slv: Z3_solver,

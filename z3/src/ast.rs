@@ -59,11 +59,13 @@ macro_rules! varop {
         pub fn $f(&self, other: &[&Ast<'ctx>]) -> Ast<'ctx> {
             Ast::new(self.ctx, unsafe {
                 let guard = Z3_MUTEX.lock().unwrap();
-                let mut tmp = vec![self.z3_ast];
+                let var_size = other.len() + 1;
+                assert!(var_size <= 0xffff_ffff);
+                let mut tmp = Vec::with_capacity(var_size);
+                tmp.push(self.z3_ast);
                 for a in other {
                     tmp.push(a.z3_ast)
                 }
-                assert!(tmp.len() <= 0xffff_ffff);
                 $z3fn(self.ctx.z3_ctx, tmp.len() as u32, tmp.as_ptr())
             })
     }
@@ -241,6 +243,93 @@ impl<'ctx> Ast<'ctx> {
             )
         })
     }
+
+
+    /// Create a forall quantifier
+    ///
+    /// * `weight`: hint to the quantifier instantiation module: "more weight equals less instances".
+    ///     Use `0`, if you aren't sure.
+    ///
+    pub fn forall(
+        ctx: &'ctx Context,
+        weight: u32,
+        //TODO: patterns: &[&Pattern<'ctx>],
+        bound: &[(&Symbol<'ctx>, &Sort<'ctx>)],
+        ast: &Ast<'ctx>,
+    ) -> Ast<'ctx> {
+        let bound_size = bound.len();
+        let mut sort_ptrs: Vec<Z3_sort> = Vec::with_capacity(bound_size);
+        let mut sym_ptrs: Vec<Z3_symbol> = Vec::with_capacity(bound_size);
+
+        for (sym, sort) in bound {
+            sym_ptrs.push(sym.z3_sym);
+            sort_ptrs.push(sort.z3_sort);
+        }
+
+
+        Ast::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_quantifier(
+                ctx.z3_ctx,
+                true,
+                weight,
+                0,
+                [].as_ptr(),
+                bound_size as u32,
+                sort_ptrs.as_ptr(),
+                sym_ptrs.as_ptr(),
+                ast.z3_ast,
+            )
+        })
+    }
+
+    fn as_app(&self) -> Z3_app {
+        unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_to_app(self.ctx.z3_ctx, self.z3_ast)
+        }
+    }
+
+    pub fn forallpy(
+        vars: &[&Ast<'ctx>],
+        ast: &Ast<'ctx>,
+    ) -> Ast<'ctx> {
+        let vars_size = vars.len();
+        assert!(vars_size > 0);
+
+        let var_ptrs: Vec<Z3_app> = vars.iter().map(|ast| ast.as_app()).collect();
+
+        let qid = ast.ctx.str_sym("");
+        let skid = ast.ctx.str_sym("");
+
+        Ast::new(ast.ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+//            Z3_mk_quantifier_const_ex(
+//                ast.ctx.z3_ctx,
+//                true,
+//                1,
+//                qid.z3_sym,
+//                skid.z3_sym,
+//                vars_size as u32,
+//                var_ptrs.as_ptr(),
+//                0,
+//                [].as_ptr(),
+//                0,
+//                [].as_ptr(),
+//                ast.z3_ast,
+//            )
+            Z3_mk_forall_const(
+                ast.ctx.z3_ctx,
+                1,
+                vars_size as u32,
+                var_ptrs.as_ptr(),
+                0,
+                [].as_ptr(),
+                ast.z3_ast,
+            )
+        })
+    }
+
 
     pub fn display(&self) -> &'ctx str {
         unsafe {
