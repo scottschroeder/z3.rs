@@ -52,6 +52,12 @@ pub struct Set<'ctx> {
     pub(crate) z3_ast: Z3_ast,
 }
 
+/// [`Ast`](trait.Ast.html) node representing a sequence value.
+pub struct Seq<'ctx> {
+    pub(crate) ctx: &'ctx Context,
+    pub(crate) z3_ast: Z3_ast,
+}
+
 /// [`Ast`](trait.Ast.html) node representing a datatype or enumeration value.
 pub struct Datatype<'ctx> {
     pub(crate) ctx: &'ctx Context,
@@ -81,6 +87,18 @@ macro_rules! binop {
             <$retty>::new(self.ctx, unsafe {
                 let guard = Z3_MUTEX.lock().unwrap();
                 $z3fn(self.ctx.z3_ctx, self.z3_ast, other.z3_ast)
+            })
+        }
+    };
+}
+
+// Same as bin_op, but reverses the order of the arguments
+macro_rules! binop_other {
+    ( $f:ident, $z3fn:ident, $retty:ty ) => {
+        pub fn $f(&self, other: &Self) -> $retty {
+            <$retty>::new(self.ctx, unsafe {
+                let guard = Z3_MUTEX.lock().unwrap();
+                $z3fn(self.ctx.z3_ctx, other.z3_ast, self.z3_ast)
             })
         }
     };
@@ -331,6 +349,8 @@ impl_ast!(BV);
 impl_from_try_into_dynamic!(BV, as_bv);
 impl_ast!(Array);
 impl_from_try_into_dynamic!(Array, as_array);
+impl_ast!(Seq);
+impl_from_try_into_dynamic!(Seq, as_seq);
 impl_ast!(Set);
 // Dynamic::as_set does not exist, so just implement one direction here
 impl<'ctx> From<Set<'ctx>> for Dynamic<'ctx> {
@@ -1072,6 +1092,86 @@ impl<'ctx> Array<'ctx> {
     }
 }
 
+impl<'ctx> Seq<'ctx> {
+    /// Create a `Seq` with from the `domain` `Sort`
+    ///
+    /// All values in the `Seq` will be unconstrained.
+    pub fn new_const<S: Into<Symbol>>(
+        ctx: &'ctx Context,
+        name: S,
+        domain: &Sort<'ctx>,
+    ) -> Seq<'ctx> {
+        let sort = Sort::seq(ctx, domain);
+        Self::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_const(ctx.z3_ctx, name.into().as_z3_symbol(ctx), sort.z3_sort)
+        })
+    }
+
+    pub fn fresh_const(
+        ctx: &'ctx Context,
+        prefix: &str,
+        domain: &Sort<'ctx>,
+    ) -> Seq<'ctx> {
+        let sort = Sort::seq(ctx, domain);
+        Self::new(ctx, unsafe {
+            let pp = CString::new(prefix).unwrap();
+            let p = pp.as_ptr();
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_fresh_const(ctx.z3_ctx, p, sort.z3_sort)
+        })
+    }
+
+    /// Create an empty sequence from the given `Sort`
+    pub fn empty_seq(
+        ctx: &'ctx Context,
+        domain: &Sort<'ctx>,
+    ) -> Seq<'ctx> {
+        Self::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            let seq_sort = Z3_mk_seq_sort(ctx.z3_ctx, domain.z3_sort);
+            Z3_mk_seq_empty(ctx.z3_ctx, seq_sort)
+        })
+    }
+
+    /// Create a "unit sequence" of length one
+    pub fn unit_seq(
+        ctx: &'ctx Context,
+        val: &Dynamic<'ctx>,
+    ) -> Seq<'ctx> {
+        Self::new(ctx, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_mk_seq_unit(ctx.z3_ctx, val.z3_ast)
+        })
+    }
+
+    // TODO: this should be on the Ast trait, but I don't know how to return Self<'dest_ctx>.
+    // When I try, it gives the error E0109 "lifetime arguments are not allowed for this type".
+    pub fn translate<'dest_ctx>(&self, dest: &'dest_ctx Context) -> Seq<'dest_ctx> {
+        Seq::new(dest, unsafe {
+            let guard = Z3_MUTEX.lock().unwrap();
+            Z3_translate(self.ctx.z3_ctx, self.z3_ast, dest.z3_ctx)
+        })
+    }
+
+    varop!(concat, Z3_mk_seq_concat, Self);
+    binop_other!(prefix, Z3_mk_seq_prefix, Self);
+    binop_other!(suffix, Z3_mk_seq_suffix, Self);
+
+    // TODO make sure the args are in the correct order
+    binop!(contains, Z3_mk_seq_contains, Self);
+    unop!(len, Z3_mk_seq_length, Int);
+
+    /*
+    TODO
+    pub fn Z3_mk_seq_extract(c: Z3_context, s: Z3_ast, offset: Z3_ast, length: Z3_ast) -> Z3_ast;
+    pub fn Z3_mk_seq_replace(c: Z3_context, s: Z3_ast, src: Z3_ast, dst: Z3_ast) -> Z3_ast;
+    pub fn Z3_mk_seq_at(c: Z3_context, s: Z3_ast, index: Z3_ast) -> Z3_ast;
+    pub fn Z3_mk_seq_length(c: Z3_context, s: Z3_ast) -> Z3_ast;
+    pub fn Z3_mk_seq_index(c: Z3_context, s: Z3_ast, substr: Z3_ast, offset: Z3_ast) -> Z3_ast;
+    */
+}
+
 impl<'ctx> Set<'ctx> {
     pub fn new_const<S: Into<Symbol>>(
         ctx: &'ctx Context,
@@ -1197,6 +1297,14 @@ impl<'ctx> Dynamic<'ctx> {
     pub fn as_array(&self) -> Option<Array<'ctx>> {
         match self.sort_kind() {
             SortKind::Array => Some(Array::new(self.ctx, self.z3_ast)),
+            _ => None,
+        }
+    }
+
+    /// Returns `None` if the `Dynamic` is not actually an `Array`
+    pub fn as_seq(&self) -> Option<Seq<'ctx>> {
+        match self.sort_kind() {
+            SortKind::Seq => Some(Seq::new(self.ctx, self.z3_ast)),
             _ => None,
         }
     }

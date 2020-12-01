@@ -136,6 +136,86 @@ fn test_bitvectors() {
     assert!(bv + 2 > av);
 }
 
+mod seq {
+    use super::*;
+    use z3::ast::Dynamic;
+
+    #[test]
+    fn empty_len_zero() {
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let s = Sort::int(&ctx);
+
+        let sz = ast::Seq::empty_seq(&ctx, &s);
+        let zero = ast::Int::from_i64(&ctx, 0);
+
+        let solver = Solver::new(&ctx);
+        solver.assert(&zero._eq(&sz.len()));
+        assert_eq!(solver.check(), SatResult::Sat);
+    }
+
+    #[test]
+    fn unit_len_one() {
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let ast_true = ast::Bool::from_bool(&ctx, true);
+        let ast_one = ast::Int::from_i64(&ctx, 1);
+        let val = Dynamic::from_ast(&ast_true);
+
+        let su = ast::Seq::unit_seq(&ctx, &val);
+
+        let solver = Solver::new(&ctx);
+        solver.assert(&ast_one._eq(&su.len()));
+        assert_eq!(solver.check(), SatResult::Sat);
+    }
+
+    #[test]
+    fn concat_extends_length() {
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let ast_true = ast::Bool::from_bool(&ctx, true);
+        let ast_false = ast::Bool::from_bool(&ctx, true);
+        let ast_two = ast::Int::from_i64(&ctx, 2);
+        let val1 = Dynamic::from_ast(&ast_true);
+        let val2 = Dynamic::from_ast(&ast_false);
+
+        let su = ast::Seq::unit_seq(&ctx, &val1);
+        let su2 = su.concat(&[
+            &ast::Seq::unit_seq(&ctx, &val2),
+        ]);
+
+        let solver = Solver::new(&ctx);
+        solver.assert(&ast_two._eq(&su2.len()));
+        assert_eq!(solver.check(), SatResult::Sat);
+    }
+
+    #[test]
+    fn seq_equality() {
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let ast_true = ast::Bool::from_bool(&ctx, true);
+        let ast_false = ast::Bool::from_bool(&ctx, true);
+        let ast_two = ast::Int::from_i64(&ctx, 2);
+        let val1 = Dynamic::from_ast(&ast_true);
+        let val2 = Dynamic::from_ast(&ast_false);
+
+        let s_t = ast::Seq::unit_seq(&ctx, &val1);
+        let s_f = ast::Seq::unit_seq(&ctx, &val2);
+        let s_tf = s_t.concat(&[&s_f]);
+        let s_tt = s_t.concat(&[&s_t]);
+
+        let sz = ast::Seq::empty_seq(&ctx, &Sort::bool(&ctx));
+
+        let ast_two = ast::Int::from_i64(&ctx, 2);
+        let solver = Solver::new(&ctx);
+        solver.assert(&s_tf._eq(&sz));
+        //solver.assert(&s_tt._eq(&s_tt));
+        //solver.assert(&sz._eq(&s_tt));
+        //solver.assert(&s_tf._eq(&s_tt).not());
+        assert_eq!(solver.check(), SatResult::Sat);
+    }
+}
+
 #[test]
 fn test_ast_translate() {
     let cfg = Config::new();
